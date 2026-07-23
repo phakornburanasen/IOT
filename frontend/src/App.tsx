@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
+import { API_BASE_URL, AUTO_REFRESH_MS } from './config'
 
 // ── Hash-based routing helpers ──────────────────────────────────────────────
 type ViewType = 'logs' | 'devices'
@@ -50,6 +51,10 @@ interface BoxStatus {
   uid: string
   last_seen: string | null
   online: boolean
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
 }
 
 function App() {
@@ -155,17 +160,14 @@ function App() {
     Created_At: 'Created At',
   }
 
-  // API base URL - FastAPI runs on port 8000
-  const API_BASE = 'http://10.115.2.50:8000/api/RFID/api'
-
   // Toast Notification handler
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     const id = Date.now()
     setToasts((prev) => [...prev, { id, message, type }])
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
     }, 3000)
-  };
+  }, [])
 
   // Close column visibility dropdown when clicking outside
   useEffect(() => {
@@ -188,10 +190,10 @@ function App() {
   }, [searchTerm])
 
   // Fetch data on parameters change
-  const fetchData = async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     try {
-      let url = `${API_BASE}/iot-data?page=${page}&limit=${limit}`
+      let url = `${API_BASE_URL}/iot-data?page=${page}&limit=${limit}`
       if (debouncedSearch) {
         url += `&search=${encodeURIComponent(debouncedSearch)}`
       }
@@ -217,16 +219,25 @@ function App() {
           }
         }
       }
-    } catch (err: any) {
-      showToast(err.message || 'Error loading data', 'error')
+    } catch (error: unknown) {
+      showToast(errorMessage(error, 'Error loading data'), 'error')
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
-  };
+  }, [page, limit, debouncedSearch, showToast])
 
   useEffect(() => {
-    fetchData()
-  }, [page, limit, debouncedSearch])
+    const initialLoad = window.setTimeout(() => void fetchData(), 0)
+    return () => window.clearTimeout(initialLoad)
+  }, [fetchData])
+
+  // Background refresh is a fallback for proxies/networks that interrupt SSE.
+  // It also guarantees that updates to an existing row become visible.
+  useEffect(() => {
+    if (activeView !== 'logs') return
+    const interval = window.setInterval(() => void fetchData(false), AUTO_REFRESH_MS)
+    return () => window.clearInterval(interval)
+  }, [activeView, fetchData])
 
   // ── Server-Sent Events: รับ rows ใหม่แบบ real-time ──────────────────────
   // เปิด SSE เฉพาะ logs view, page 1, ไม่มี search
@@ -243,7 +254,7 @@ function App() {
     if (activeView !== 'logs' || page !== 1 || debouncedSearch !== '' || loading) return
 
     const connectSSE = () => {
-      const url = `${API_BASE}/iot-stream?last_id=${lastIdRef.current}`
+      const url = `${API_BASE_URL}/iot-stream?last_id=${lastIdRef.current}`
       const es = new EventSource(url)
       sseRef.current = es
 
@@ -287,11 +298,12 @@ function App() {
             return limit > 0 ? merged.slice(0, limit) : merged
           })
           setTotal(prev => prev + newRows.length)
-          setTotalPages(prev => {
-            const newTotal = total + newRows.length
-            return limit > 0 ? Math.ceil(newTotal / limit) : prev
-          })
         } catch { /* ignore parse errors */ }
+      })
+
+      // Go backend emits this for inserts, updates, and deletes.
+      es.addEventListener('data_changed', () => {
+        void fetchData(false)
       })
 
       es.onerror = () => {
@@ -313,29 +325,36 @@ function App() {
       }
       setSseConnected(false)
     }
-  }, [activeView, page, debouncedSearch, loading])
+  }, [activeView, page, debouncedSearch, loading, limit, fetchData])
 
   // Fetch box ping status from backend
-  const fetchBoxStatus = async () => {
+  const fetchBoxStatus = useCallback(async () => {
     setBoxStatusLoading(true)
     setBoxStatusError(null)
     try {
-      const res = await fetch(`${API_BASE}/box-status`)
+      const res = await fetch(`${API_BASE_URL}/box-status`)
       if (!res.ok) throw new Error('Failed to fetch box status')
       const json = await res.json()
       setBoxStatuses(json.boxes || [])
-    } catch (err: any) {
-      setBoxStatusError(err.message || 'Error fetching box status')
+    } catch (error: unknown) {
+      setBoxStatusError(errorMessage(error, 'Error fetching box status'))
     } finally {
       setBoxStatusLoading(false)
     }
-  }
+  }, [])
 
   // Auto-fetch box status when devices view is active, refresh every 30s
   useEffect(() => {
     if (activeView === 'devices') {
-      fetchBoxStatus()
+      const initialLoad = window.setTimeout(() => void fetchBoxStatus(), 0)
       boxStatusIntervalRef.current = setInterval(fetchBoxStatus, 30000)
+      return () => {
+        window.clearTimeout(initialLoad)
+        if (boxStatusIntervalRef.current) {
+          clearInterval(boxStatusIntervalRef.current)
+          boxStatusIntervalRef.current = null
+        }
+      }
     } else {
       if (boxStatusIntervalRef.current) {
         clearInterval(boxStatusIntervalRef.current)
@@ -348,13 +367,13 @@ function App() {
         boxStatusIntervalRef.current = null
       }
     }
-  }, [activeView])
+  }, [activeView, fetchBoxStatus])
 
   // Delete row handler
   const handleDeleteConfirm = async () => {
     if (deleteId === null) return
     try {
-      const response = await fetch(`${API_BASE}/iot-data/${deleteId}`, {
+      const response = await fetch(`${API_BASE_URL}/iot-data/${deleteId}`, {
         method: 'DELETE',
       })
       if (!response.ok) {
@@ -371,8 +390,8 @@ function App() {
       } else {
         fetchData()
       }
-    } catch (err: any) {
-      showToast(err.message || 'Error deleting record', 'error')
+    } catch (error: unknown) {
+      showToast(errorMessage(error, 'Error deleting record'), 'error')
       setDeleteId(null)
     }
   };
@@ -528,7 +547,7 @@ function App() {
         <div className="navbar-right">
           <div className="connection-status">
             <span className="pulse-indicator online"></span>
-            <span className="status-label-text">FastAPI Server: Connected</span>
+            <span className="status-label-text">Go API Server: Connected</span>
           </div>
           {/* Real-time SSE indicator */}
           {activeView === 'logs' && page === 1 && debouncedSearch === '' && (
@@ -579,7 +598,7 @@ function App() {
           </div>
 
           <div className="sidebar-info-card">
-            <div className="info-title">FastAPI IP API</div>
+            <div className="info-title">Go API Endpoint</div>
             <div className="info-value">10.0.0.32.71:8000</div>
           </div>
         </aside>
@@ -604,7 +623,7 @@ function App() {
                   </button>
 
                   {/* Refresh Button */}
-                  <button className="btn btn-secondary" onClick={fetchData} title="รีเฟรชข้อมูล">
+                  <button className="btn btn-secondary" onClick={() => void fetchData()} title="รีเฟรชข้อมูล">
                     <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                     </svg>
