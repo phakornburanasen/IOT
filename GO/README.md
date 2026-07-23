@@ -50,7 +50,20 @@ chmod +x build.sh
 ./build.sh
 ```
 
-Artifacts are written to `bin/iot-api-windows-amd64.exe` and `bin/iot-api-linux-amd64`.
+Ready-to-deploy packages are written to `bin/windows-amd64` and `bin/linux-amd64`. Each folder contains the executable, `.env`, and this README. The build also creates `bin/iot-api-windows-amd64.tar.gz` and `bin/iot-api-linux-amd64.tar.gz`; using the archive prevents the hidden `.env` file from being omitted during transfer.
+
+Linux deployment example:
+
+```sh
+mkdir -p /opt/iot-api
+tar -xzf iot-api-linux-amd64.tar.gz -C /opt/iot-api
+cd /opt/iot-api
+chmod 600 .env
+chmod +x iot-api-linux-amd64
+./iot-api-linux-amd64
+```
+
+The application reads `.env` from the current working directory first and then from the executable's directory, so it can also be started from another directory.
 
 Manual build commands:
 

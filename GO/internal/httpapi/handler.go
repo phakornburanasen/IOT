@@ -96,6 +96,14 @@ func (h *Handler) boxStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
+	// SSE connections are intentionally long-lived. Clear the server-wide
+	// WriteTimeout for this response so the chunked stream is not cut after
+	// the normal REST response deadline.
+	controller := http.NewResponseController(w)
+	if err := controller.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		h.logger.Warn("cannot clear SSE write deadline", "error", err)
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "Streaming is not supported")

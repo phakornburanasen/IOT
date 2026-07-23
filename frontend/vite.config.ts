@@ -12,9 +12,8 @@ export default defineConfig(({ mode }) => {
       host: true,
       proxy: {
         '/api/RFID/api': {
-          target: env.VITE_DEV_API_TARGET || 'http://localhost:8000/api/RFID',
+          target: env.VITE_DEV_API_TARGET || 'http://localhost:8000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/RFID\/api/, '/api'),
         },
       },
     },

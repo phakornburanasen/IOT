@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,12 @@ type Config struct {
 func Load() (Config, error) {
 	if err := loadEnvFile(".env"); err != nil {
 		return Config{}, fmt.Errorf("load .env: %w", err)
+	}
+	if executable, err := os.Executable(); err == nil {
+		executableEnv := filepath.Join(filepath.Dir(executable), ".env")
+		if err := loadEnvFile(executableEnv); err != nil {
+			return Config{}, fmt.Errorf("load %s: %w", executableEnv, err)
+		}
 	}
 
 	cfg := Config{
