@@ -37,6 +37,27 @@ interface IotData {
   Created_At: string | null
 }
 
+// Fixed column widths keep the table geometry stable when page data changes.
+const columnWidths: Record<keyof IotData, number> = {
+  id: 82,
+  Status: 132,
+  Status_Text: 160,
+  Uid: 150,
+  Box: 120,
+  Order: 130,
+  Count: 94,
+  Time: 110,
+  Hour: 90,
+  Second: 96,
+  PauseTime: 130,
+  SN_mac: 180,
+  Key_button: 116,
+  Ip_address: 145,
+  SSID_wifi: 160,
+  Ref_id: 100,
+  Created_At: 180,
+}
+
 interface Toast {
   id: number
   type: 'success' | 'error'
@@ -64,6 +85,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [debouncedSearch, setDebouncedSearch] = useState<string>('')
   const [page, setPage] = useState<number>(1)
+  const [displayedPage, setDisplayedPage] = useState<number>(1)
   const [limit, setLimit] = useState<number>(10)
   const [total, setTotal] = useState<number>(0)
   const [totalPages, setTotalPages] = useState<number>(0)
@@ -105,6 +127,7 @@ function App() {
   const [sortField, setSortField] = useState<keyof IotData | null>('id')
   const [sortAsc, setSortAsc] = useState<boolean>(false) // Default descending by ID (newest first)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const requestIdRef = useRef<number>(0)
 
   // Box ping status state
   const [boxStatuses, setBoxStatuses] = useState<BoxStatus[]>([])
@@ -191,6 +214,7 @@ function App() {
 
   // Fetch data on parameters change
   const fetchData = useCallback(async (showLoading = true) => {
+    const requestId = ++requestIdRef.current
     if (showLoading) setLoading(true)
     try {
       let url = `${API_BASE_URL}/iot-data?page=${page}&limit=${limit}`
@@ -204,10 +228,13 @@ function App() {
       const resData = await response.json()
 
       // Safety check: if page is out of bounds due to deletions or other state changes
+      if (requestId !== requestIdRef.current) return
+
       if (resData.data.length === 0 && resData.total_pages > 0 && page > resData.total_pages) {
         setPage(resData.total_pages)
       } else {
         setData(resData.data)
+        setDisplayedPage(page)
         setTotal(resData.total)
         setTotalPages(resData.total_pages)
 
@@ -220,9 +247,11 @@ function App() {
         }
       }
     } catch (error: unknown) {
-      showToast(errorMessage(error, 'Error loading data'), 'error')
+      if (requestId === requestIdRef.current) {
+        showToast(errorMessage(error, 'Error loading data'), 'error')
+      }
     } finally {
-      if (showLoading) setLoading(false)
+      if (showLoading && requestId === requestIdRef.current) setLoading(false)
     }
   }, [page, limit, debouncedSearch, showToast])
 
@@ -464,6 +493,10 @@ function App() {
       ? String(valA).localeCompare(String(valB))
       : String(valB).localeCompare(String(valA))
   })
+  const visibleTableWidth = (Object.keys(columnWidths) as (keyof IotData)[])
+    .filter((col) => visibleColumns[col])
+    .reduce((sum, col) => sum + columnWidths[col], 112)
+  const tableMinHeight = limit > 0 ? 49 * limit + 49 : 200
 
   // Toggle Column Visibility
   const toggleColumn = (col: keyof IotData) => {
@@ -698,13 +731,18 @@ function App() {
                 </div>
 
                 {/* Data Table */}
-                <div className="table-responsive">
-                  {loading ? (
+                <div
+                  className={`table-responsive ${loading ? 'is-loading' : ''}`}
+                  style={{ minHeight: `${tableMinHeight}px` }}
+                  aria-busy={loading}
+                >
+                  {loading && (
                     <div className="loading-overlay">
                       <div className="spinner"></div>
                       <span>กำลังดึงข้อมูลจาก SQL Server...</span>
                     </div>
-                  ) : sortedData.length === 0 ? (
+                  )}
+                  {!loading && sortedData.length === 0 ? (
                     <div className="empty-state">
                       <svg className="empty-state-icon" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -712,8 +750,14 @@ function App() {
                       <h3>ไม่พบข้อมูล IOT</h3>
                       <p>ไม่พบรายการที่ค้นหา หรือฐานข้อมูลยังไม่มีแถวข้อมูล</p>
                     </div>
-                  ) : (
-                    <table className="premium-table">
+                  ) : sortedData.length > 0 ? (
+                    <table className="premium-table" style={{ minWidth: `${visibleTableWidth}px` }}>
+                      <colgroup>
+                        {(Object.keys(columnWidths) as (keyof IotData)[]).map((col) => (
+                          visibleColumns[col] ? <col key={col} style={{ width: `${columnWidths[col]}px` }} /> : null
+                        ))}
+                        <col style={{ width: '112px' }} />
+                      </colgroup>
                       <thead>
                         <tr>
                           {(Object.keys(columnLabels) as (keyof IotData)[]).map((col) => {
@@ -749,7 +793,7 @@ function App() {
                           <th style={{ textAlign: 'center' }}>การทำงาน</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody key={displayedPage} className="table-page-enter">
                         {sortedData.map((row) => (
                           <tr
                             key={row.id}
@@ -819,17 +863,17 @@ function App() {
                         ))}
                       </tbody>
                     </table>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Pagination Panel */}
-                {!loading && data.length > 0 && (
+                {data.length > 0 && (
                   <div className="pagination-container">
                     <div className="pagination-info">
                       {limit === -1 ? (
                         <>แสดงทั้งหมด <span className="pagination-highlight">{total}</span> รายการ</>
                       ) : (
-                        <>แสดง <span className="pagination-highlight">{((page - 1) * limit) + 1}</span> ถึง <span className="pagination-highlight">{((page - 1) * limit) + data.length}</span> จากทั้งหมด <span className="pagination-highlight">{total}</span> รายการ</>
+                        <>แสดง <span className="pagination-highlight">{((displayedPage - 1) * limit) + 1}</span> ถึง <span className="pagination-highlight">{((displayedPage - 1) * limit) + data.length}</span> จากทั้งหมด <span className="pagination-highlight">{total}</span> รายการ</>
                       )}
                     </div>
 
