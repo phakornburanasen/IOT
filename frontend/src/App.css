@@ -33,10 +33,12 @@
 
 /* Premium Card & Glassmorphic Container */
 .dashboard-card {
-  background: #ffffff;
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(203, 213, 225, 0.82);
   border-radius: 16px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 10px 30px -18px rgba(51, 65, 85, 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -51,7 +53,7 @@
   align-items: center;
   padding: 20px 24px;
   border-bottom: 1px solid var(--border);
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.72);
   flex-wrap: wrap;
   gap: 16px;
 }
@@ -173,7 +175,7 @@
 }
 
 .premium-table th {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.76);
   color: var(--text-h);
   padding: 14px 16px;
   font-weight: 600;
@@ -928,7 +930,14 @@
   flex-direction: column;
   min-height: 100vh;
   width: 100%;
-  background: var(--bg);
+  background-color: #eef4f9;
+  background-image:
+    linear-gradient(rgba(248, 251, 254, 0.18), rgba(238, 245, 250, 0.18)),
+    url('/IOT/marble-bg.svg');
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 .main-layout {
@@ -947,10 +956,10 @@
   left: 0;
   right: 0;
   height: 64px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(18px) saturate(115%);
+  -webkit-backdrop-filter: blur(18px) saturate(115%);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.72);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1053,8 +1062,10 @@
 /* 2. Sidebar Styles */
 .sidebar {
   width: 260px;
-  background: #ffffff;
-  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px) saturate(110%);
+  -webkit-backdrop-filter: blur(18px) saturate(110%);
+  border-right: 1px solid rgba(203, 213, 225, 0.72);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1174,8 +1185,8 @@
 }
 
 .device-card {
-  background: #ffffff;
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(203, 213, 225, 0.82);
   border-radius: 16px;
   box-shadow: var(--shadow);
   display: flex;
@@ -1197,7 +1208,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  background: #fafbfc;
+  background: rgba(248, 250, 252, 0.72);
 }
 
 .device-info-left {
@@ -1246,7 +1257,7 @@
 
 .device-card-footer {
   padding: 14px 20px;
-  background: #fafbfc;
+  background: rgba(248, 250, 252, 0.72);
   border-top: 1px solid var(--border);
   font-size: 12.5px;
   color: var(--text);
@@ -1262,8 +1273,10 @@
   left: 0;
   right: 0;
   height: 50px;
-  background: #ffffff;
-  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(18px) saturate(110%);
+  -webkit-backdrop-filter: blur(18px) saturate(110%);
+  border-top: 1px solid rgba(203, 213, 225, 0.72);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1301,6 +1314,10 @@
 
 /* Mobile & Tablet Responsiveness */
 @media (max-width: 768px) {
+  .app-container {
+    background-attachment: scroll;
+  }
+
   .sidebar {
     position: fixed;
     height: calc(100vh - 64px - 50px);
