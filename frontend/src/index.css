@@ -63,6 +63,11 @@
 body {
   margin: 0;
   background: #eef4f9;
+  background-image: url('/IOT/marble-bg.svg?v=2');
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 h1,

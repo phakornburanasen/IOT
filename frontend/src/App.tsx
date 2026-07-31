@@ -151,14 +151,14 @@ function App() {
     Box: true,
     Order: true,
     Count: true,
-    Time: true,
+    Time: false,
     Hour: false, // Default hidden to keep main view clean
-    Second: false, // Default hidden to keep main view clean
+    Second: true, // Default hidden to keep main view clean
     PauseTime: true,
     SN_mac: true,
     Key_button: true,
     Ip_address: true,
-    SSID_wifi: true,
+    SSID_wifi: false, // Default hidden
     Ref_id: false, // Default hidden
     Created_At: true,
   })
