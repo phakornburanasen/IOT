@@ -33,9 +33,11 @@ func main() {
 	defer db.Close()
 
 	repo := repository.NewIOTRepository(db)
+	gatewayRepo := repository.NewGatewayRepository(db)
 	iotService := service.NewIOTService(repo)
+	gatewayService := service.NewGatewayService(gatewayRepo)
 	pingService := service.NewPingService(cfg.PingTimeout, cfg.PingWorkers)
-	handler := httpapi.NewHandler(iotService, pingService, cfg, logger)
+	handler := httpapi.NewHandler(iotService, gatewayService, pingService, cfg, logger)
 
 	server := &http.Server{
 		Addr:         cfg.Address(),

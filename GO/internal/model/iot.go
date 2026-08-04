@@ -42,3 +42,21 @@ type DataFingerprint struct {
 	MaxID    int64
 	Checksum int64
 }
+
+type APIRoute struct {
+	ID         int64   `json:"id"`
+	DeviceName string  `json:"device_name"`
+	Protocol   *string `json:"protocol"`
+	Host       string  `json:"host"`
+	Port       int     `json:"port"`
+	Status     *string `json:"status"`
+	Detail     *string `json:"detail"`
+}
+
+type APIDetailOption struct {
+	ID       int64   `json:"id"`
+	Host     string  `json:"host"`
+	Port     int     `json:"port"`
+	Protocol *string `json:"protocol"`
+	Detail   *string `json:"detail"`
+}

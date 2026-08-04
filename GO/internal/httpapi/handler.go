@@ -17,14 +17,15 @@ import (
 )
 
 type Handler struct {
-	iot    *service.IOTService
-	ping   *service.PingService
-	cfg    config.Config
-	logger *slog.Logger
+	iot     *service.IOTService
+	gateway *service.GatewayService
+	ping    *service.PingService
+	cfg     config.Config
+	logger  *slog.Logger
 }
 
-func NewHandler(iot *service.IOTService, ping *service.PingService, cfg config.Config, logger *slog.Logger) *Handler {
-	return &Handler{iot: iot, ping: ping, cfg: cfg, logger: logger}
+func NewHandler(iot *service.IOTService, gateway *service.GatewayService, ping *service.PingService, cfg config.Config, logger *slog.Logger) *Handler {
+	return &Handler{iot: iot, gateway: gateway, ping: ping, cfg: cfg, logger: logger}
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -34,7 +35,92 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE "+h.cfg.APIPrefix+"/iot-data/{id}", h.delete)
 	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/box-status", h.boxStatus)
 	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/iot-stream", h.stream)
+	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/api-routes", h.listAPIRoutes)
+	mux.HandleFunc("POST "+h.cfg.APIPrefix+"/api-routes", h.createAPIRoute)
+	mux.HandleFunc("PATCH "+h.cfg.APIPrefix+"/api-routes/{id}", h.updateAPIRoute)
+	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/api-details", h.listAPIDetails)
 	return recoverPanic(cors(h.cfg.AllowedOrigins, mux))
+}
+
+func (h *Handler) listAPIRoutes(w http.ResponseWriter, r *http.Request) {
+	routes, err := h.gateway.ListRoutes(r.Context())
+	if err != nil {
+		h.logger.Error("list api routes failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "Database query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": routes})
+}
+
+func (h *Handler) listAPIDetails(w http.ResponseWriter, r *http.Request) {
+	details, err := h.gateway.ListDetails(r.Context())
+	if err != nil {
+		h.logger.Error("list api details failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "Database query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": details})
+}
+
+type createAPIRouteRequest struct {
+	DeviceName  string `json:"device_name"`
+	APIDetailID int64  `json:"api_detail_id"`
+}
+
+func (h *Handler) createAPIRoute(w http.ResponseWriter, r *http.Request) {
+	var request createAPIRouteRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	request.DeviceName = strings.TrimSpace(request.DeviceName)
+	if request.DeviceName == "" || request.APIDetailID < 1 {
+		writeError(w, http.StatusBadRequest, "device_name and api_detail_id are required")
+		return
+	}
+	route, err := h.gateway.CreateRoute(r.Context(), request.DeviceName, request.APIDetailID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "API detail not found")
+			return
+		}
+		h.logger.Error("create api route failed", "error", err)
+		writeError(w, http.StatusConflict, "Box name already exists or the route could not be created")
+		return
+	}
+	writeJSON(w, http.StatusCreated, route)
+}
+
+type updateAPIRouteRequest struct {
+	DeviceName string `json:"device_name"`
+}
+
+func (h *Handler) updateAPIRoute(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusBadRequest, "id must be a positive integer")
+		return
+	}
+	var request updateAPIRouteRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	request.DeviceName = strings.TrimSpace(request.DeviceName)
+	if request.DeviceName == "" {
+		writeError(w, http.StatusBadRequest, "device_name is required")
+		return
+	}
+	if err := h.gateway.UpdateDeviceName(r.Context(), id, request.DeviceName); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "API route not found")
+			return
+		}
+		h.logger.Error("update api route failed", "id", id, "error", err)
+		writeError(w, http.StatusConflict, "Box name already exists or the route could not be updated")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Box name updated"})
 }
 
 func (h *Handler) health(w http.ResponseWriter, r *http.Request) {

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 import { API_BASE_URL, AUTO_REFRESH_MS } from './config'
+import APIGateway from './APIGateway'
 
 // ── Hash-based routing helpers ──────────────────────────────────────────────
-type ViewType = 'logs' | 'devices'
+type ViewType = 'logs' | 'devices' | 'gateway'
 
-const VALID_VIEWS: ViewType[] = ['logs', 'devices']
+const VALID_VIEWS: ViewType[] = ['logs', 'devices', 'gateway']
 
 function getViewFromHash(): ViewType {
   const hash = window.location.hash.replace('#/', '').split('?')[0] as ViewType
@@ -628,6 +629,16 @@ function App() {
               </svg>
               <span>Device Status</span>
             </button>
+
+            <button
+              className={`menu-item ${activeView === 'gateway' ? 'active' : ''}`}
+              onClick={() => navigate('gateway')}
+            >
+              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h7.5M8.25 12h7.5m-7.5 5.25h7.5M3.75 4.5v15A2.25 2.25 0 006 21h12a2.25 2.25 0 002.25-2.25V4.5A2.25 2.25 0 0018 2.25H6A2.25 2.25 0 003.75 4.5z" />
+              </svg>
+              <span>API Gateway</span>
+            </button>
           </div>
 
           <div className="sidebar-info-card">
@@ -944,7 +955,7 @@ function App() {
                 )}
               </div>
             </div>
-          ) : (
+          ) : activeView === 'devices' ? (
             <div className="dashboard">
               {/* Device Status — Box Ping Node View */}
               <div className="dashboard-header">
@@ -1083,6 +1094,8 @@ function App() {
                 </div>
               )}
             </div>
+          ) : (
+            <APIGateway showToast={showToast} />
           )}
         </main>
       </div>
