@@ -687,7 +687,7 @@ function App() {
                     <input
                       type="text"
                       className="search-input"
-                      placeholder="ค้นหา..."
+                      placeholder="Search ..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />

@@ -25,6 +25,6 @@ func (s *GatewayService) CreateRoute(ctx context.Context, deviceName string, det
 	return s.repository.CreateRoute(ctx, deviceName, detailID)
 }
 
-func (s *GatewayService) UpdateDeviceName(ctx context.Context, id int64, deviceName string) error {
-	return s.repository.UpdateDeviceName(ctx, id, deviceName)
+func (s *GatewayService) UpdateRoute(ctx context.Context, id, detailID int64, status string) (model.APIRoute, error) {
+	return s.repository.UpdateRoute(ctx, id, detailID, status)
 }

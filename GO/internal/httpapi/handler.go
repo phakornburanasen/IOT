@@ -92,7 +92,8 @@ func (h *Handler) createAPIRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateAPIRouteRequest struct {
-	DeviceName string `json:"device_name"`
+	APIDetailID int64  `json:"api_detail_id"`
+	Status      string `json:"status"`
 }
 
 func (h *Handler) updateAPIRoute(w http.ResponseWriter, r *http.Request) {
@@ -106,21 +107,22 @@ func (h *Handler) updateAPIRoute(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	request.DeviceName = strings.TrimSpace(request.DeviceName)
-	if request.DeviceName == "" {
-		writeError(w, http.StatusBadRequest, "device_name is required")
+	request.Status = strings.ToUpper(strings.TrimSpace(request.Status))
+	if request.APIDetailID < 1 || (request.Status != "ACTIVE" && request.Status != "INACTIVE") {
+		writeError(w, http.StatusBadRequest, "api_detail_id is required and status must be ACTIVE or INACTIVE")
 		return
 	}
-	if err := h.gateway.UpdateDeviceName(r.Context(), id, request.DeviceName); err != nil {
+	route, err := h.gateway.UpdateRoute(r.Context(), id, request.APIDetailID, request.Status)
+	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "API route not found")
+			writeError(w, http.StatusNotFound, "API route or API detail not found")
 			return
 		}
 		h.logger.Error("update api route failed", "id", id, "error", err)
-		writeError(w, http.StatusConflict, "Box name already exists or the route could not be updated")
+		writeError(w, http.StatusInternalServerError, "The API route could not be updated")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Box name updated"})
+	writeJSON(w, http.StatusOK, route)
 }
 
 func (h *Handler) health(w http.ResponseWriter, r *http.Request) {

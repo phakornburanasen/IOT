@@ -1238,14 +1238,20 @@
 /* API Gateway */
 .gateway-controls { align-items: center; }
 .gateway-count { color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.gateway-table-options { display: flex; align-items: center; gap: 18px; }
+.gateway-table-options .limit-selector { margin: 0; }
 .gateway-table-wrap { min-height: 300px; }
 .gateway-table { min-width: 920px; table-layout: auto; }
 .gateway-table th:last-child, .gateway-table td:last-child { width: 96px; text-align: center; }
 .gateway-detail { min-width: 280px; max-width: 520px; white-space: normal; line-height: 1.55; }
-.gateway-edit { padding: 7px 12px; }
+.gateway-edit { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+.gateway-edit:hover { transform: translateY(-1px); box-shadow: 0 5px 12px -7px rgba(37, 99, 235, .65); }
 .protocol-badge { display: inline-flex; padding: 4px 9px; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .route-status { display: inline-flex; padding: 5px 10px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 800; letter-spacing: .35px; }
 .route-status.active { background: #dcfce7; color: #15803d; }
+.route-status.inactive { background: #fee2e2; color: #b91c1c; }
+.gateway-row-updated { animation: gatewayRowUpdated 1.8s ease-out; }
+@keyframes gatewayRowUpdated { 0% { background: rgba(34, 197, 94, .22); } 100% { background: transparent; } }
 .gateway-modal { text-align: left; max-width: 560px; }
 .gateway-modal .modal-title, .gateway-modal .modal-desc { text-align: left; }
 .form-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; color: var(--text-h); font-size: 13px; font-weight: 700; }
@@ -1254,7 +1260,17 @@
 .selected-endpoint { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; margin: -4px 0 22px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
 .selected-endpoint span { color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .selected-endpoint code { color: #1d4ed8; overflow-wrap: anywhere; }
+.gateway-readonly { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 12px 14px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.gateway-readonly span { color: #64748b; font-size: 12px; font-weight: 700; }
+.gateway-readonly strong { color: #0f172a; }
 .gateway-modal .modal-actions { justify-content: flex-end; margin-top: 24px; }
+.gateway-submit { color: #1d4ed8; border-color: rgba(96, 165, 250, .48); font-weight: 700; }
+.gateway-submit:hover:not(:disabled) { background: #eff6ff; border-color: #60a5fa; }
+
+@media (max-width: 720px) {
+  .gateway-controls, .gateway-table-options { align-items: stretch; flex-direction: column; }
+  .gateway-table-options { gap: 10px; }
+}
 
 /* 4. Device Status Grid & Card Styles */
 .devices-grid {

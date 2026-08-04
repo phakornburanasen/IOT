@@ -69,11 +69,16 @@ func (r *GatewayRepository) ListDetails(ctx context.Context) ([]model.APIDetailO
 
 func (r *GatewayRepository) CreateRoute(ctx context.Context, deviceName string, detailID int64) (model.APIRoute, error) {
 	const query = `
+DECLARE @changed TABLE (id int);
 INSERT INTO dbo.api_routes (device_name, host, port, protocol)
-OUTPUT INSERTED.id, INSERTED.device_name, INSERTED.protocol, INSERTED.host, INSERTED.port, INSERTED.status
+OUTPUT INSERTED.id INTO @changed(id)
 SELECT @device_name, host, port, protocol
 FROM dbo.api_details
-WHERE id = @detail_id`
+WHERE id = @detail_id;
+
+SELECT routes.id, routes.device_name, routes.protocol, routes.host, routes.port, routes.status
+FROM dbo.api_routes AS routes
+INNER JOIN @changed AS changed ON changed.id = routes.id;`
 	var item model.APIRoute
 	var protocol, status sql.NullString
 	err := r.db.QueryRowContext(ctx, query,
@@ -91,23 +96,40 @@ WHERE id = @detail_id`
 	return item, nil
 }
 
-func (r *GatewayRepository) UpdateDeviceName(ctx context.Context, id int64, deviceName string) error {
-	result, err := r.db.ExecContext(ctx, `
-UPDATE dbo.api_routes
-SET device_name = @device_name, updated_at = GETDATE()
-WHERE id = @id`,
-		sql.Named("device_name", strings.TrimSpace(deviceName)),
+func (r *GatewayRepository) UpdateRoute(ctx context.Context, id, detailID int64, status string) (model.APIRoute, error) {
+	const query = `
+DECLARE @changed TABLE (id int);
+UPDATE routes
+SET host = details.host,
+    port = details.port,
+    protocol = details.protocol,
+    status = @status,
+    updated_at = GETDATE()
+OUTPUT INSERTED.id INTO @changed(id)
+FROM dbo.api_routes AS routes
+INNER JOIN dbo.api_details AS details ON details.id = @detail_id
+WHERE routes.id = @id;
+
+SELECT routes.id, routes.device_name, routes.protocol, routes.host, routes.port,
+       routes.status, details.detail
+FROM dbo.api_routes AS routes
+INNER JOIN @changed AS changed ON changed.id = routes.id
+INNER JOIN dbo.api_details AS details ON details.id = @detail_id;`
+	var item model.APIRoute
+	var protocol, routeStatus, detail sql.NullString
+	err := r.db.QueryRowContext(ctx, query,
+		sql.Named("status", strings.TrimSpace(status)),
+		sql.Named("detail_id", detailID),
 		sql.Named("id", id),
-	)
+	).Scan(&item.ID, &item.DeviceName, &protocol, &item.Host, &item.Port, &routeStatus, &detail)
+	if err == sql.ErrNoRows {
+		return model.APIRoute{}, ErrNotFound
+	}
 	if err != nil {
-		return fmt.Errorf("update api route: %w", err)
+		return model.APIRoute{}, fmt.Errorf("update api route: %w", err)
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("read affected api routes: %w", err)
-	}
-	if affected == 0 {
-		return ErrNotFound
-	}
-	return nil
+	item.Protocol = stringPtr(protocol)
+	item.Status = stringPtr(routeStatus)
+	item.Detail = stringPtr(detail)
+	return item, nil
 }
