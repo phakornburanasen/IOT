@@ -64,11 +64,11 @@ export default function APIGateway({ showToast }: Props) {
   const loadDetails = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api-details`)
-      if (!response.ok) throw new Error(await responseError(response, 'Failed to load API details'))
+      if (!response.ok) throw new Error(await responseError(response, 'Failed to load API EndPoint'))
       const body = await response.json()
       setDetails(body.data || [])
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to load API details', 'error')
+      showToast(error instanceof Error ? error.message : 'Failed to load API EndPoint', 'error')
     }
   }, [showToast])
 
@@ -197,7 +197,7 @@ export default function APIGateway({ showToast }: Props) {
           {loading ? (
             <div className="loading-overlay"><div className="spinner" /><span>กำลังโหลด API routes...</span></div>
           ) : filteredRoutes.length === 0 ? (
-            <div className="empty-state"><h3>ไม่พบข้อมูล API Gateway</h3><p>เพิ่มรายการใหม่โดยเลือก API detail ที่ต้องการ</p></div>
+            <div className="empty-state"><h3>ไม่พบข้อมูล API Gateway</h3><p>เพิ่มรายการใหม่โดยเลือก API EndPoint ที่ต้องการ</p></div>
           ) : (
             <table className="premium-table gateway-table">
               <thead><tr><th>Box name</th><th>Protocol</th><th>Host</th><th>Port</th><th>Status</th><th>Detail</th><th>จัดการ</th></tr></thead>
@@ -240,9 +240,9 @@ export default function APIGateway({ showToast }: Props) {
         <div className="modal-overlay" onClick={() => !saving && setShowCreate(false)}>
           <form className="modal-content gateway-modal" onSubmit={createRoute} onClick={(event) => event.stopPropagation()}>
             <h3 className="modal-title">Add Box</h3>
-            <p className="modal-desc">Enter a Box name and select the destination API detail.</p>
+            <p className="modal-desc">Enter a Box name and select the destination API EndPoint.</p>
             <label className="form-field"><span>Box name</span><input autoFocus value={boxName} onChange={(event) => setBoxName(event.target.value)} placeholder="e.g. TEAM_D" maxLength={100} required /></label>
-            <label className="form-field"><span>API detail</span><select value={detailID} onChange={(event) => setDetailID(event.target.value)} required><option value="">Select an API detail</option>{details.map((detail) => <option key={detail.id} value={detail.id}>{detail.detail || `API #${detail.id}`} — {detail.protocol || 'http'}://{detail.host}:{detail.port}</option>)}</select></label>
+            <label className="form-field"><span>API EndPoint</span><select value={detailID} onChange={(event) => setDetailID(event.target.value)} required><option value="">Select an API EndPoint</option>{details.map((detail) => <option key={detail.id} value={detail.id}>{detail.detail || `API #${detail.id}`} — {detail.protocol || 'http'}://{detail.host}:{detail.port}</option>)}</select></label>
             {selectedDetail && <div className="selected-endpoint"><span>Endpoint</span><code>{selectedDetail.protocol || 'http'}://{selectedDetail.host}:{selectedDetail.port}</code></div>}
             <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)} disabled={saving}>Cancel</button><button type="submit" className="btn btn-secondary gateway-submit" disabled={saving || !boxName.trim() || !detailID}>{saving ? 'Saving...' : 'Add Box'}</button></div>
           </form>
@@ -253,9 +253,9 @@ export default function APIGateway({ showToast }: Props) {
         <div className="modal-overlay" onClick={() => !saving && setEditing(null)}>
           <form className="modal-content gateway-modal" onSubmit={updateRoute} onClick={(event) => event.stopPropagation()}>
             <h3 className="modal-title">Edit API Gateway</h3>
-            <p className="modal-desc">Select a new API detail for <strong>{editing.device_name}</strong>.</p>
+            <p className="modal-desc">Select a new API EndPoint for <strong>{editing.device_name}</strong>.</p>
             <div className="gateway-readonly"><span>Box name</span><strong>{editing.device_name}</strong></div>
-            <label className="form-field"><span>API detail</span><select autoFocus value={detailID} onChange={(event) => setDetailID(event.target.value)} required><option value="">Select an API detail</option>{details.map((detail) => <option key={detail.id} value={detail.id}>{detail.detail || `API #${detail.id}`} — {detail.protocol || 'http'}://{detail.host}:{detail.port}</option>)}</select></label>
+            <label className="form-field"><span>API EndPoint</span><select autoFocus value={detailID} onChange={(event) => setDetailID(event.target.value)} required><option value="">Select an API EndPoint</option>{details.map((detail) => <option key={detail.id} value={detail.id}>{detail.detail || `API #${detail.id}`} — {detail.protocol || 'http'}://{detail.host}:{detail.port}</option>)}</select></label>
             <label className="form-field"><span>Status</span><select value={editStatus} onChange={(event) => setEditStatus(event.target.value)}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></label>
             {selectedDetail && <div className="selected-endpoint"><span>New endpoint</span><code>{selectedDetail.protocol || 'http'}://{selectedDetail.host}:{selectedDetail.port}</code></div>}
             <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setEditing(null)} disabled={saving}>Cancel</button><button type="submit" className="btn btn-secondary gateway-submit" disabled={saving || !detailID}>{saving ? 'Updating...' : 'Update'}</button></div>
