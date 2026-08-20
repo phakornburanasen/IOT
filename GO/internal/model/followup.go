@@ -1,14 +1,16 @@
 package model
 
 type FollowUpWorkItem struct {
-	UID      string  `json:"uid"`
-	Team     *string `json:"team"`
-	BoxNo    *string `json:"box_no"`
-	Start    *string `json:"start"`
-	Status   *string `json:"status"`
-	EmpID    *string `json:"emp_id"`
-	User     string  `json:"user"`
-	UserName *string `json:"user_name"`
+	UID       string  `json:"uid"`
+	Team      *string `json:"team"`
+	BoxNo     *string `json:"box_no"`
+	Start     *string `json:"start"`
+	Status    *string `json:"status"`
+	EmpID     *string `json:"emp_id"`
+	User      string  `json:"user"`
+	UserName  *string `json:"user_name"`
+	KeyButton *int64  `json:"key_button"`
+	FinishAt  *string `json:"finish_at"`
 }
 
 type FollowUpWorkListResult struct {

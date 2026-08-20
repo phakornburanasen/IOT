@@ -1,5 +1,4 @@
-.env
-.cache/
+
 bin/
 *.exe
 *.log

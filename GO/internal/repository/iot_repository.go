@@ -82,7 +82,7 @@ FROM (
 
 	query := `
 WITH filtered AS (
-	SELECT id, Uid, Box, SN_mac, Status_Text, Emp_id
+	SELECT id, Uid, Box, SN_mac, Status_Text, Emp_id, Key_button
 	FROM dbo.iot_data` + where + `
 ),
 latest AS (
@@ -93,7 +93,11 @@ latest AS (
 		SN_mac,
 		Status_Text,
 		Emp_id,
-		ROW_NUMBER() OVER (PARTITION BY Uid ORDER BY id DESC) AS rn
+		Key_button,
+		ROW_NUMBER() OVER (PARTITION BY Uid ORDER BY
+			CASE WHEN Key_button = 7 THEN 0 ELSE 1 END ASC,
+			id DESC
+		) AS rn
 	FROM filtered
 ),
 starts AS (
@@ -101,10 +105,17 @@ starts AS (
 	FROM dbo.iot_data
 	WHERE Uid <> '' AND Key_button = 1
 	GROUP BY Uid
+),
+finishes AS (
+	SELECT Uid, MAX(Created_At) AS FinishAt
+	FROM dbo.iot_data
+	WHERE Uid <> '' AND Key_button = 7
+	GROUP BY Uid
 )
-SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id
+SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id, latest.Key_button, finishes.FinishAt
 FROM latest
 LEFT JOIN starts ON starts.Uid = latest.Uid
+LEFT JOIN finishes ON finishes.Uid = latest.Uid
 WHERE latest.rn = 1
 ORDER BY latest.id DESC`
 
@@ -152,19 +163,27 @@ ORDER BY latest.id DESC`
 func (r *IOTRepository) FollowUpWorkByUID(ctx context.Context, uid string) (model.FollowUpWorkItem, error) {
 	const query = `
 WITH latest AS (
-	SELECT TOP (1) id, Uid, Box, SN_mac, Status_Text, Emp_id
+	SELECT TOP (1) id, Uid, Box, SN_mac, Status_Text, Emp_id, Key_button
 	FROM dbo.iot_data
 	WHERE Uid = @uid
-	ORDER BY id DESC
+	ORDER BY
+		CASE WHEN Key_button = 7 THEN 0 ELSE 1 END ASC,
+		id DESC
 ),
 starts AS (
 	SELECT MIN(Created_At) AS StartAt
 	FROM dbo.iot_data
 	WHERE Uid = @uid AND Key_button = 1
+),
+finishes AS (
+	SELECT MAX(Created_At) AS FinishAt
+	FROM dbo.iot_data
+	WHERE Uid = @uid AND Key_button = 7
 )
-SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id
+SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id, latest.Key_button, finishes.FinishAt
 FROM latest
-CROSS JOIN starts`
+CROSS JOIN starts
+CROSS JOIN finishes`
 
 	item, err := scanFollowUpWorkItem(r.db.QueryRowContext(ctx, query, sql.Named("uid", uid)))
 	if err != nil {
@@ -322,8 +341,9 @@ func timePtr(value sql.NullTime) *string {
 func scanFollowUpWorkItem(row scanner) (model.FollowUpWorkItem, error) {
 	var item model.FollowUpWorkItem
 	var team, boxNo, status, empID sql.NullString
-	var startAt sql.NullTime
-	if err := row.Scan(&item.UID, &team, &boxNo, &startAt, &status, &empID); err != nil {
+	var startAt, finishAt sql.NullTime
+	var keyButton sql.NullInt64
+	if err := row.Scan(&item.UID, &team, &boxNo, &startAt, &status, &empID, &keyButton, &finishAt); err != nil {
 		return model.FollowUpWorkItem{}, fmt.Errorf("scan follow-up work: %w", err)
 	}
 	item.Team = stringPtr(team)
@@ -331,6 +351,8 @@ func scanFollowUpWorkItem(row scanner) (model.FollowUpWorkItem, error) {
 	item.Start = timePtr(startAt)
 	item.Status = stringPtr(status)
 	item.EmpID = stringPtr(empID)
+	item.KeyButton = intPtr(keyButton)
+	item.FinishAt = timePtr(finishAt)
 	if item.EmpID != nil {
 		item.User = strings.TrimSpace(*item.EmpID)
 	}

@@ -14,6 +14,8 @@ interface FollowUpSummary {
   emp_id: string | null
   user: string
   user_name: string | null
+  key_button: number | null
+  finish_at: string | null
 }
 
 interface FollowUpListResponse {
@@ -334,7 +336,7 @@ export default function FollowUpWork({ showToast }: Props) {
             <div className="followup-detail-header">
               <div>
                 <h2>รายละเอียดงาน</h2>
-                <p>{selectedSummary ? `RFID ${selectedSummary.uid}` : 'เลือกรายการเพื่อดูรายละเอียด'}</p>
+                <p>{selectedSummary ? `Barcode / RFID : ${selectedSummary.uid} ${selectedSummary.key_button === 7 ? 'Finished' : ''}` : 'เลือกรายการเพื่อดูรายละเอียด'}</p>
               </div>
               {detail?.detail.source_key && (
                 <span className="status-badge status-other">source: {detail.detail.source_key}</span>
@@ -359,6 +361,56 @@ export default function FollowUpWork({ showToast }: Props) {
             ) : (
               <div className="followup-detail-body">
                 <div className="followup-summary-grid">
+                  <div className="detail-item followup-progress-card">
+                    <div className="followup-progress-header">
+                      <span className="detail-label">PROGRESS</span>
+                      {(() => {
+                        const isFinished = selectedSummary.key_button === 7
+                        const statusLower = (selectedSummary.status || '').toLowerCase()
+                        const isCounting = !isFinished && statusLower === 'count'
+                        if (isCounting) {
+                          return <span className="pulse-dot" aria-label="Running" />
+                        }
+                        return null
+                      })()}
+                    </div>
+                    {(() => {
+                      const isFinished = selectedSummary.key_button === 7
+                      const progressStr = (detail?.detail.progress || '').trim()
+                      let current = 0
+                      let total = 0
+                      const match = progressStr.match(/^(\d+)\s*\/\s*(\d+)$/)
+                      if (match) {
+                        current = parseInt(match[1], 10)
+                        total = parseInt(match[2], 10)
+                      } else if (detail?.detail.qty != null && detail?.detail.bundle != null) {
+                        current = detail.detail.qty
+                        total = detail.detail.bundle
+                      }
+                      const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0
+                      const showBar = total > 0
+                      const isComplete = isFinished || percent >= 100
+                      if (!showBar) {
+                        return <span className="detail-val followup-muted">-</span>
+                      }
+                      return (
+                        <div className="followup-progress-value">
+                          <div className="followup-progress-bar">
+                            <div
+                              className={`followup-progress-fill ${isComplete ? 'is-finished' : ''}`}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          <div className="followup-progress-meta">
+                            <span className="followup-progress-text">{current}/{total} ชิ้น</span>
+                            <span className={`followup-progress-percent ${isComplete ? 'is-finished' : ''}`}>
+                              {percent}%
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
                   <div className="detail-item">
                     <span className="detail-label">Barcode / RFID</span>
                     <span className="detail-val code-text">{selectedSummary.uid}</span>
@@ -377,7 +429,33 @@ export default function FollowUpWork({ showToast }: Props) {
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Status</span>
-                    <span className="detail-val">{selectedSummary.status || '-'}</span>
+                    {(() => {
+                      const isFinished = selectedSummary.key_button === 7
+                      const statusLower = (selectedSummary.status || '').toLowerCase()
+                      const isCounting = !isFinished && statusLower === 'count'
+                      if (isFinished) {
+                        return (
+                          <div className="status-finished">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>finish</span>
+                            {selectedSummary.finish_at && (
+                              <span className="status-finished-time">{selectedSummary.finish_at}</span>
+                            )}
+                          </div>
+                        )
+                      }
+                      if (isCounting) {
+                        return (
+                          <div className="status-counting">
+                            <span className="pulse-dot" />
+                            <span>Running...</span>
+                          </div>
+                        )
+                      }
+                      return <span className="detail-val">{selectedSummary.status || '-'}</span>
+                    })()}
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">User</span>
@@ -398,7 +476,7 @@ export default function FollowUpWork({ showToast }: Props) {
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">QTY</span>
-                    <span className="detail-val number-val">{detail?.detail.qty ?? '-'}</span>
+                    <span className="detail-val followup-muted">{detail?.detail.qty ?? '-'}</span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">SAPORDER</span>
@@ -406,7 +484,7 @@ export default function FollowUpWork({ showToast }: Props) {
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">BUNDLE</span>
-                    <span className="detail-val number-val">{detail?.detail.bundle ?? '-'}</span>
+                    <span className="detail-val followup-muted">{detail?.detail.bundle ?? '-'}</span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">STYLE</span>
@@ -414,11 +492,7 @@ export default function FollowUpWork({ showToast }: Props) {
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">COLOR</span>
-                    <span className="detail-val">{detail?.detail.color || '-'}</span>
-                  </div>
-                  <div className="detail-item followup-progress-card">
-                    <span className="detail-label">PROGRESS</span>
-                    <span className="detail-val number-val">{detail?.detail.progress || '-'}</span>
+                    <span className="detail-val followup-muted">{detail?.detail.color || '-'}</span>
                   </div>
                 </div>
               </div>

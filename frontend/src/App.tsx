@@ -93,6 +93,7 @@ function App() {
   const [totalPages, setTotalPages] = useState<number>(0)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [copiedUid, setCopiedUid] = useState<string | null>(null)
 
   // Navigation layout state — sidebar persisted in localStorage, view from URL hash
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
@@ -219,7 +220,10 @@ function App() {
           throw new Error('execCommand copy failed')
         }
       }
-      showToast(`คัดลอก UID: ${value}`)
+      setCopiedUid(value)
+      window.setTimeout(() => {
+        setCopiedUid((cur) => (cur === value ? null : cur))
+      }, 1500)
     } catch {
       showToast('ไม่สามารถคัดลอก UID ได้', 'error')
     }
@@ -1206,13 +1210,22 @@ function App() {
                     <span className="detail-val code-text">{selectedRow.Uid || '-'}</span>
                     <button
                       type="button"
-                      className="detail-copy-btn"
+                      className={`detail-copy-btn ${copiedUid === selectedRow.Uid ? 'copied' : ''}`}
                       onClick={() => void copyUID(selectedRow.Uid || '')}
                       title="Copy UID"
                     >
-                      <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 7.5V6A2.25 2.25 0 0110.5 3.75h7.5A2.25 2.25 0 0120.25 6v7.5A2.25 2.25 0 0118 15.75h-1.5m-8.25-8.25H6A2.25 2.25 0 003.75 9.75v8.25A2.25 2.25 0 006 20.25h8.25a2.25 2.25 0 002.25-2.25V9.75A2.25 2.25 0 0014.25 7.5H8.25z" />
-                      </svg>
+                      {copiedUid === selectedRow.Uid ? (
+                        <>
+                          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                          <span className="copy-label">คัดลอก</span>
+                        </>
+                      ) : (
+                        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 7.5V6A2.25 2.25 0 0110.5 3.75h7.5A2.25 2.25 0 0120.25 6v7.5A2.25 2.25 0 0118 15.75h-1.5m-8.25-8.25H6A2.25 2.25 0 003.75 9.75v8.25A2.25 2.25 0 006 20.25h8.25a2.25 2.25 0 002.25-2.25V9.75A2.25 2.25 0 0014.25 7.5H8.25z" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </div>
