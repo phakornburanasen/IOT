@@ -60,6 +60,122 @@ Ip_address LIKE @search OR SSID_wifi LIKE @search OR Status_Text LIKE @search OR
 	return model.ListResult{Data: data, Total: total, Page: page, Limit: limit, TotalPages: totalPages}, nil
 }
 
+func (r *IOTRepository) ListFollowUpWork(ctx context.Context, page, limit int, search string) (model.FollowUpWorkListResult, error) {
+	where := " WHERE Uid <> ''"
+	args := []any{}
+	if search != "" {
+		where += " AND Uid LIKE @search"
+		args = append(args, sql.Named("search", "%"+search+"%"))
+	}
+
+	countQuery := `
+SELECT COUNT(*)
+FROM (
+	SELECT Uid
+	FROM dbo.iot_data` + where + `
+	GROUP BY Uid
+) AS grouped_uid`
+	var total int64
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return model.FollowUpWorkListResult{}, fmt.Errorf("count follow-up work: %w", err)
+	}
+
+	query := `
+WITH filtered AS (
+	SELECT id, Uid, Box, SN_mac, Status_Text, Emp_id
+	FROM dbo.iot_data` + where + `
+),
+latest AS (
+	SELECT
+		id,
+		Uid,
+		Box,
+		SN_mac,
+		Status_Text,
+		Emp_id,
+		ROW_NUMBER() OVER (PARTITION BY Uid ORDER BY id DESC) AS rn
+	FROM filtered
+),
+starts AS (
+	SELECT Uid, MIN(Created_At) AS StartAt
+	FROM dbo.iot_data
+	WHERE Uid <> '' AND Key_button = 1
+	GROUP BY Uid
+)
+SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id
+FROM latest
+LEFT JOIN starts ON starts.Uid = latest.Uid
+WHERE latest.rn = 1
+ORDER BY latest.id DESC`
+
+	queryArgs := append([]any{}, args...)
+	if limit != -1 {
+		query += " OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
+		queryArgs = append(queryArgs,
+			sql.Named("offset", (page-1)*limit),
+			sql.Named("limit", limit),
+		)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return model.FollowUpWorkListResult{}, fmt.Errorf("list follow-up work: %w", err)
+	}
+	defer rows.Close()
+
+	data := make([]model.FollowUpWorkItem, 0)
+	for rows.Next() {
+		item, scanErr := scanFollowUpWorkItem(rows)
+		if scanErr != nil {
+			return model.FollowUpWorkListResult{}, scanErr
+		}
+		data = append(data, item)
+	}
+	if err := rows.Err(); err != nil {
+		return model.FollowUpWorkListResult{}, err
+	}
+
+	totalPages := int64(1)
+	if limit != -1 {
+		totalPages = (total + int64(limit) - 1) / int64(limit)
+	}
+
+	return model.FollowUpWorkListResult{
+		Data:       data,
+		Total:      total,
+		Page:       page,
+		Limit:      limit,
+		TotalPages: totalPages,
+	}, nil
+}
+
+func (r *IOTRepository) FollowUpWorkByUID(ctx context.Context, uid string) (model.FollowUpWorkItem, error) {
+	const query = `
+WITH latest AS (
+	SELECT TOP (1) id, Uid, Box, SN_mac, Status_Text, Emp_id
+	FROM dbo.iot_data
+	WHERE Uid = @uid
+	ORDER BY id DESC
+),
+starts AS (
+	SELECT MIN(Created_At) AS StartAt
+	FROM dbo.iot_data
+	WHERE Uid = @uid AND Key_button = 1
+)
+SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id
+FROM latest
+CROSS JOIN starts`
+
+	item, err := scanFollowUpWorkItem(r.db.QueryRowContext(ctx, query, sql.Named("uid", uid)))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.FollowUpWorkItem{}, ErrNotFound
+		}
+		return model.FollowUpWorkItem{}, err
+	}
+	return item, nil
+}
+
 func (r *IOTRepository) Delete(ctx context.Context, id int64) error {
 	result, err := r.db.ExecContext(ctx, "DELETE FROM dbo.iot_data WHERE id = @id", sql.Named("id", id))
 	if err != nil {
@@ -201,4 +317,22 @@ func timePtr(value sql.NullTime) *string {
 	}
 	formatted := value.Time.Format("02/01/2006 15:04:05")
 	return &formatted
+}
+
+func scanFollowUpWorkItem(row scanner) (model.FollowUpWorkItem, error) {
+	var item model.FollowUpWorkItem
+	var team, boxNo, status, empID sql.NullString
+	var startAt sql.NullTime
+	if err := row.Scan(&item.UID, &team, &boxNo, &startAt, &status, &empID); err != nil {
+		return model.FollowUpWorkItem{}, fmt.Errorf("scan follow-up work: %w", err)
+	}
+	item.Team = stringPtr(team)
+	item.BoxNo = stringPtr(boxNo)
+	item.Start = timePtr(startAt)
+	item.Status = stringPtr(status)
+	item.EmpID = stringPtr(empID)
+	if item.EmpID != nil {
+		item.User = strings.TrimSpace(*item.EmpID)
+	}
+	return item, nil
 }

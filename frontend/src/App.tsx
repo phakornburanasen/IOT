@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 import { API_BASE_URL, AUTO_REFRESH_MS } from './config'
 import APIGateway from './APIGateway'
+import FollowUpWork from './FollowUpWork'
 
 // ── Hash-based routing helpers ──────────────────────────────────────────────
-type ViewType = 'logs' | 'devices' | 'gateway'
+type ViewType = 'logs' | 'devices' | 'gateway' | 'followup'
 
-const VALID_VIEWS: ViewType[] = ['logs', 'devices', 'gateway']
+const VALID_VIEWS: ViewType[] = ['logs', 'devices', 'gateway', 'followup']
 
 function getViewFromHash(): ViewType {
   const hash = window.location.hash.replace('#/', '').split('?')[0] as ViewType
@@ -192,6 +193,37 @@ function App() {
       setToasts((prev) => prev.filter((t) => t.id !== id))
     }, 3000)
   }, [])
+
+  const copyUID = useCallback(async (uid: string) => {
+    const value = uid.trim()
+    if (!value) {
+      showToast('ไม่มี UID สำหรับคัดลอก', 'error')
+      return
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value)
+      } else {
+        const input = document.createElement('textarea')
+        input.value = value
+        input.setAttribute('readonly', '')
+        input.style.position = 'fixed'
+        input.style.opacity = '0'
+        input.style.pointerEvents = 'none'
+        document.body.appendChild(input)
+        input.focus()
+        input.select()
+        const copied = document.execCommand('copy')
+        document.body.removeChild(input)
+        if (!copied) {
+          throw new Error('execCommand copy failed')
+        }
+      }
+      showToast(`คัดลอก UID: ${value}`)
+    } catch {
+      showToast('ไม่สามารถคัดลอก UID ได้', 'error')
+    }
+  }, [showToast])
 
   // Close column visibility dropdown when clicking outside
   useEffect(() => {
@@ -639,6 +671,17 @@ function App() {
               </svg>
               <span>API Gateway</span>
             </button>
+
+            <button
+              className={`menu-item ${activeView === 'followup' ? 'active' : ''}`}
+              onClick={() => navigate('followup')}
+            >
+              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.75h10.5A2.25 2.25 0 0119.5 6v12A2.25 2.25 0 0117.25 20.25H6.75A2.25 2.25 0 014.5 18V6a2.25 2.25 0 012.25-2.25z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 8.25h7.5M8.25 12h7.5M8.25 15.75h4.5" />
+              </svg>
+              <span>Follow Up On Work</span>
+            </button>
           </div>
 
           <div className="sidebar-info-card">
@@ -691,6 +734,18 @@ function App() {
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        className="search-clear-btn"
+                        onClick={() => setSearchTerm('')}
+                        title="Clear search"
+                      >
+                        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
 
                   <div className="panel-right-controls">
@@ -1094,8 +1149,10 @@ function App() {
                 </div>
               )}
             </div>
-          ) : (
+          ) : activeView === 'gateway' ? (
             <APIGateway showToast={showToast} />
+          ) : (
+            <FollowUpWork showToast={showToast} />
           )}
         </main>
       </div>
@@ -1145,7 +1202,19 @@ function App() {
               <div className="drawer-details-grid">
                 <div className="detail-item">
                   <span className="detail-label">UID (รหัสอุปกรณ์)</span>
-                  <span className="detail-val code-text">{selectedRow.Uid || '-'}</span>
+                  <div className="detail-copy-row">
+                    <span className="detail-val code-text">{selectedRow.Uid || '-'}</span>
+                    <button
+                      type="button"
+                      className="detail-copy-btn"
+                      onClick={() => void copyUID(selectedRow.Uid || '')}
+                      title="Copy UID"
+                    >
+                      <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 7.5V6A2.25 2.25 0 0110.5 3.75h7.5A2.25 2.25 0 0120.25 6v7.5A2.25 2.25 0 0118 15.75h-1.5m-8.25-8.25H6A2.25 2.25 0 003.75 9.75v8.25A2.25 2.25 0 006 20.25h8.25a2.25 2.25 0 002.25-2.25V9.75A2.25 2.25 0 0014.25 7.5H8.25z" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div className="detail-item">
                   <span className="detail-label">Box (กล่อง)</span>

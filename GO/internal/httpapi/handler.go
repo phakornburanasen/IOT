@@ -18,14 +18,15 @@ import (
 
 type Handler struct {
 	iot     *service.IOTService
+	follow  *service.FollowUpService
 	gateway *service.GatewayService
 	ping    *service.PingService
 	cfg     config.Config
 	logger  *slog.Logger
 }
 
-func NewHandler(iot *service.IOTService, gateway *service.GatewayService, ping *service.PingService, cfg config.Config, logger *slog.Logger) *Handler {
-	return &Handler{iot: iot, gateway: gateway, ping: ping, cfg: cfg, logger: logger}
+func NewHandler(iot *service.IOTService, follow *service.FollowUpService, gateway *service.GatewayService, ping *service.PingService, cfg config.Config, logger *slog.Logger) *Handler {
+	return &Handler{iot: iot, follow: follow, gateway: gateway, ping: ping, cfg: cfg, logger: logger}
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -35,6 +36,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE "+h.cfg.APIPrefix+"/iot-data/{id}", h.delete)
 	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/box-status", h.boxStatus)
 	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/iot-stream", h.stream)
+	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/follow-up-work", h.followUpList)
+	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/follow-up-work-detail", h.followUpDetail)
 	mux.HandleFunc("GET "+h.cfg.APIPrefix+"/api-routes", h.listAPIRoutes)
 	mux.HandleFunc("POST "+h.cfg.APIPrefix+"/api-routes", h.createAPIRoute)
 	mux.HandleFunc("PATCH "+h.cfg.APIPrefix+"/api-routes/{id}", h.updateAPIRoute)
@@ -150,6 +153,45 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("list iot data failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "Database query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) followUpList(w http.ResponseWriter, r *http.Request) {
+	page, err := positiveQuery(r, "page", 1)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	limit, err := limitQuery(r, 20)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.follow.List(r.Context(), page, limit, strings.TrimSpace(r.URL.Query().Get("search")))
+	if err != nil {
+		h.logger.Error("list follow-up work failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "Follow-up work query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) followUpDetail(w http.ResponseWriter, r *http.Request) {
+	uid := strings.TrimSpace(r.URL.Query().Get("uid"))
+	if uid == "" {
+		writeError(w, http.StatusBadRequest, "uid is required")
+		return
+	}
+	result, err := h.follow.Detail(r.Context(), uid)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Follow-up work record not found")
+			return
+		}
+		h.logger.Error("follow-up work detail failed", "uid", uid, "error", err)
+		writeError(w, http.StatusInternalServerError, "Follow-up work detail query failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

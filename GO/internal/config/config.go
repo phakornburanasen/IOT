@@ -37,6 +37,9 @@ type Config struct {
 	ChangePollInterval time.Duration
 	PingTimeout        time.Duration
 	PingWorkers        int
+	ExternalAPITimeout time.Duration
+	EmployeeAPIURL     string
+	BundleAPIBaseURL   string
 	Database           Database
 }
 
@@ -63,6 +66,9 @@ func Load() (Config, error) {
 		ChangePollInterval: durationEnv("CHANGE_POLL_INTERVAL", 2*time.Second),
 		PingTimeout:        durationEnv("PING_TIMEOUT", 2*time.Second),
 		PingWorkers:        intEnv("PING_WORKERS", 16),
+		ExternalAPITimeout: durationEnv("EXTERNAL_API_TIMEOUT", 8*time.Second),
+		EmployeeAPIURL:     env("EMPLOYEE_API_URL", "http://10.0.32.202:3030/api_local/_survey_employee.php"),
+		BundleAPIBaseURL:   strings.TrimRight(env("BUNDLE_API_BASE_URL", "http://10.0.32.70:50000/api/TEAM_A/api"), "/"),
 		Database: Database{
 			Server:                 strings.TrimSpace(os.Getenv("DB_SERVER")),
 			Port:                   env("DB_PORT", "1433"),

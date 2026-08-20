@@ -186,6 +186,21 @@ export default function APIGateway({ showToast }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.2-5.2m0 0A7.5 7.5 0 105.2 5.2a7.5 7.5 0 0010.6 10.6z" />
             </svg>
             <input className="search-input" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Search ..." />
+            {search && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => {
+                  setSearch('')
+                  setPage(1)
+                }}
+                title="Clear search"
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
           <div className="gateway-table-options">
             <span className="gateway-count">{filteredRoutes.length} records</span>
