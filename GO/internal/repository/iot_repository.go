@@ -82,10 +82,10 @@ FROM (
 
 	query := `
 WITH filtered AS (
-	SELECT id, Uid, Box, SN_mac, Status_Text, Emp_id, Key_button
+	SELECT id, Uid, Box, SN_mac, Status_Text, Emp_id, Key_button, Created_At
 	FROM dbo.iot_data` + where + `
 ),
-latest AS (
+latest_actual AS (
 	SELECT
 		id,
 		Uid,
@@ -94,10 +94,8 @@ latest AS (
 		Status_Text,
 		Emp_id,
 		Key_button,
-		ROW_NUMBER() OVER (PARTITION BY Uid ORDER BY
-			CASE WHEN Key_button = 7 THEN 0 ELSE 1 END ASC,
-			id DESC
-		) AS rn
+		Created_At,
+		ROW_NUMBER() OVER (PARTITION BY Uid ORDER BY id DESC) AS rn
 	FROM filtered
 ),
 starts AS (
@@ -106,18 +104,32 @@ starts AS (
 	WHERE Uid <> '' AND Key_button = 1
 	GROUP BY Uid
 ),
-finishes AS (
-	SELECT Uid, MAX(Created_At) AS FinishAt
+latest_finishes AS (
+	SELECT
+		Uid,
+		Created_At AS FinishAt,
+		ROW_NUMBER() OVER (PARTITION BY Uid ORDER BY id DESC) AS rn
 	FROM dbo.iot_data
 	WHERE Uid <> '' AND Key_button = 7
-	GROUP BY Uid
 )
-SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id, latest.Key_button, finishes.FinishAt
-FROM latest
-LEFT JOIN starts ON starts.Uid = latest.Uid
-LEFT JOIN finishes ON finishes.Uid = latest.Uid
-WHERE latest.rn = 1
-ORDER BY latest.id DESC`
+SELECT
+	latest_actual.Uid,
+	latest_actual.Box,
+	latest_actual.SN_mac,
+	starts.StartAt,
+	latest_actual.Created_At,
+	CASE
+		WHEN latest_finishes.FinishAt IS NOT NULL THEN 'finish'
+		ELSE latest_actual.Status_Text
+	END AS Status_Text,
+	latest_actual.Emp_id,
+	latest_actual.Key_button,
+	latest_finishes.FinishAt
+FROM latest_actual
+LEFT JOIN starts ON starts.Uid = latest_actual.Uid
+LEFT JOIN latest_finishes ON latest_finishes.Uid = latest_actual.Uid AND latest_finishes.rn = 1
+WHERE latest_actual.rn = 1
+ORDER BY latest_actual.id DESC`
 
 	queryArgs := append([]any{}, args...)
 	if limit != -1 {
@@ -162,28 +174,38 @@ ORDER BY latest.id DESC`
 
 func (r *IOTRepository) FollowUpWorkByUID(ctx context.Context, uid string) (model.FollowUpWorkItem, error) {
 	const query = `
-WITH latest AS (
-	SELECT TOP (1) id, Uid, Box, SN_mac, Status_Text, Emp_id, Key_button
+WITH latest_actual AS (
+	SELECT TOP (1) id, Uid, Box, SN_mac, Status_Text, Emp_id, Key_button, Created_At
 	FROM dbo.iot_data
 	WHERE Uid = @uid
-	ORDER BY
-		CASE WHEN Key_button = 7 THEN 0 ELSE 1 END ASC,
-		id DESC
+	ORDER BY id DESC
 ),
 starts AS (
 	SELECT MIN(Created_At) AS StartAt
 	FROM dbo.iot_data
 	WHERE Uid = @uid AND Key_button = 1
-),
-finishes AS (
-	SELECT MAX(Created_At) AS FinishAt
+)
+SELECT
+	latest_actual.Uid,
+	latest_actual.Box,
+	latest_actual.SN_mac,
+	starts.StartAt,
+	latest_actual.Created_At,
+	CASE
+		WHEN latest_finishes.FinishAt IS NOT NULL THEN 'finish'
+		ELSE latest_actual.Status_Text
+	END AS Status_Text,
+	latest_actual.Emp_id,
+	latest_actual.Key_button,
+	latest_finishes.FinishAt
+FROM latest_actual
+CROSS JOIN starts
+OUTER APPLY (
+	SELECT TOP (1) Created_At AS FinishAt
 	FROM dbo.iot_data
 	WHERE Uid = @uid AND Key_button = 7
-)
-SELECT latest.Uid, latest.Box, latest.SN_mac, starts.StartAt, latest.Status_Text, latest.Emp_id, latest.Key_button, finishes.FinishAt
-FROM latest
-CROSS JOIN starts
-CROSS JOIN finishes`
+	ORDER BY id DESC
+) AS latest_finishes`
 
 	item, err := scanFollowUpWorkItem(r.db.QueryRowContext(ctx, query, sql.Named("uid", uid)))
 	if err != nil {
@@ -341,14 +363,15 @@ func timePtr(value sql.NullTime) *string {
 func scanFollowUpWorkItem(row scanner) (model.FollowUpWorkItem, error) {
 	var item model.FollowUpWorkItem
 	var team, boxNo, status, empID sql.NullString
-	var startAt, finishAt sql.NullTime
+	var startAt, latestAt, finishAt sql.NullTime
 	var keyButton sql.NullInt64
-	if err := row.Scan(&item.UID, &team, &boxNo, &startAt, &status, &empID, &keyButton, &finishAt); err != nil {
+	if err := row.Scan(&item.UID, &team, &boxNo, &startAt, &latestAt, &status, &empID, &keyButton, &finishAt); err != nil {
 		return model.FollowUpWorkItem{}, fmt.Errorf("scan follow-up work: %w", err)
 	}
 	item.Team = stringPtr(team)
 	item.BoxNo = stringPtr(boxNo)
 	item.Start = timePtr(startAt)
+	item.LatestAt = timePtr(latestAt)
 	item.Status = stringPtr(status)
 	item.EmpID = stringPtr(empID)
 	item.KeyButton = intPtr(keyButton)

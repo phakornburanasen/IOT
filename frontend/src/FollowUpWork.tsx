@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { API_BASE_URL } from './config'
 
 interface Props {
@@ -10,6 +10,7 @@ interface FollowUpSummary {
   team: string | null
   box_no: string | null
   start: string | null
+  latest_status_at: string | null
   status: string | null
   emp_id: string | null
   user: string
@@ -43,6 +44,19 @@ interface FollowUpDetailResponse {
   detail: FollowUpDetail
 }
 
+interface DetailLineProps {
+  label: string
+  value: ReactNode
+  valueClassName?: string
+}
+
+interface ProgressState {
+  current: number
+  total: number
+  percent: number
+  showBar: boolean
+}
+
 function readErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback
 }
@@ -54,6 +68,75 @@ async function parseApiError(response: Response, fallback: string) {
   } catch {
     return fallback
   }
+}
+
+function DetailLine({ label, value, valueClassName }: DetailLineProps) {
+  return (
+    <div className="detail-item detail-item-inline">
+      <div className="detail-line">
+        <span className="detail-label">{label}</span>
+        <span className="detail-separator">:</span>
+        <span className={valueClassName ? `detail-val ${valueClassName}` : 'detail-val'}>{value}</span>
+      </div>
+    </div>
+  )
+}
+
+function getProgressState(detail: FollowUpDetailResponse | null): ProgressState {
+  const progressStr = (detail?.detail.progress || '').trim()
+  let current = 0
+  let total = 0
+  const match = progressStr.match(/^(\d+)\s*\/\s*(\d+)$/)
+
+  if (match) {
+    current = parseInt(match[1], 10)
+    total = parseInt(match[2], 10)
+  } else if (detail?.detail.qty != null && detail?.detail.bundle != null) {
+    current = detail.detail.qty
+    total = detail.detail.bundle
+  }
+
+  return {
+    current,
+    total,
+    percent: total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0,
+    showBar: total > 0,
+  }
+}
+
+function isSummaryFinished(summary: FollowUpSummary) {
+  const statusLower = (summary.status || '').trim().toLowerCase()
+  const hasFinishAt = Boolean(summary.finish_at && summary.finish_at.trim())
+
+  return summary.key_button === 7
+    || hasFinishAt
+    || statusLower === 'finish'
+    || statusLower === 'finished'
+}
+
+function getStatusTimestamp(summary: FollowUpSummary) {
+  const isFinished = isSummaryFinished(summary)
+
+  if (isFinished) {
+    return summary.finish_at || summary.start || '-'
+  }
+
+  return summary.latest_status_at || summary.start || '-'
+}
+
+function getStatusKind(summary: FollowUpSummary) {
+  const statusLower = (summary.status || '').trim().toLowerCase()
+
+  if (isSummaryFinished(summary)) {
+    return 'finished'
+  }
+  if (statusLower === 'count' || statusLower === 'running' || statusLower === 'run') {
+    return 'running'
+  }
+  if (statusLower === 'pause' || statusLower.startsWith('pause')) {
+    return 'paused'
+  }
+  return 'default'
 }
 
 export default function FollowUpWork({ showToast }: Props) {
@@ -182,13 +265,16 @@ export default function FollowUpWork({ showToast }: Props) {
     }
   }, [selectedUid, showToast])
 
-  const selectedSummary = useMemo(
+  const listSummary = useMemo(
     () => rows.find((item) => item.uid === selectedUid) ?? null,
     [rows, selectedUid],
   )
+  // The detail endpoint is queried after selecting a row, so it is the
+  // authoritative source for statuses that may change after the list loads.
+  const selectedSummary = detail?.summary.uid === selectedUid ? detail.summary : listSummary
 
   return (
-    <div className="dashboard">
+    <div className="dashboard followup-dashboard">
       <div className="dashboard-header">
         <div className="dashboard-title-group">
           <h1>Follow Up On Work</h1>
@@ -336,7 +422,7 @@ export default function FollowUpWork({ showToast }: Props) {
             <div className="followup-detail-header">
               <div>
                 <h2>รายละเอียดงาน</h2>
-                <p>{selectedSummary ? `Barcode / RFID : ${selectedSummary.uid} ${selectedSummary.key_button === 7 ? 'Finished' : ''}` : 'เลือกรายการเพื่อดูรายละเอียด'}</p>
+                <p>{selectedSummary ? `Barcode / RFID : ${selectedSummary.uid} ${isSummaryFinished(selectedSummary) ? 'Finished' : ''}` : 'เลือกรายการเพื่อดูรายละเอียด'}</p>
               </div>
               {detail?.detail.source_key && (
                 <span className="status-badge status-other">source: {detail.detail.source_key}</span>
@@ -365,7 +451,7 @@ export default function FollowUpWork({ showToast }: Props) {
                     <div className="followup-progress-header">
                       <span className="detail-label">PROGRESS</span>
                       {(() => {
-                        const isFinished = selectedSummary.key_button === 7
+                        const isFinished = isSummaryFinished(selectedSummary)
                         const statusLower = (selectedSummary.status || '').toLowerCase()
                         const isCounting = !isFinished && statusLower === 'count'
                         if (isCounting) {
@@ -375,20 +461,8 @@ export default function FollowUpWork({ showToast }: Props) {
                       })()}
                     </div>
                     {(() => {
-                      const isFinished = selectedSummary.key_button === 7
-                      const progressStr = (detail?.detail.progress || '').trim()
-                      let current = 0
-                      let total = 0
-                      const match = progressStr.match(/^(\d+)\s*\/\s*(\d+)$/)
-                      if (match) {
-                        current = parseInt(match[1], 10)
-                        total = parseInt(match[2], 10)
-                      } else if (detail?.detail.qty != null && detail?.detail.bundle != null) {
-                        current = detail.detail.qty
-                        total = detail.detail.bundle
-                      }
-                      const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0
-                      const showBar = total > 0
+                      const isFinished = isSummaryFinished(selectedSummary)
+                      const { current, total, percent, showBar } = getProgressState(detail)
                       const isComplete = isFinished || percent >= 100
                       if (!showBar) {
                         return <span className="detail-val followup-muted">-</span>
@@ -411,89 +485,69 @@ export default function FollowUpWork({ showToast }: Props) {
                       )
                     })()}
                   </div>
+                  <DetailLine label="Barcode / RFID" value={selectedSummary.uid} valueClassName="code-text" />
+                  <DetailLine label="Team" value={selectedSummary.team || '-'} />
+                  <DetailLine label="BoxNo." value={selectedSummary.box_no || '-'} valueClassName="code-text" />
+                  <DetailLine label="Start" value={selectedSummary.start || '-'} />
                   <div className="detail-item">
-                    <span className="detail-label">Barcode / RFID</span>
-                    <span className="detail-val code-text">{selectedSummary.uid}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">Team</span>
-                    <span className="detail-val">{selectedSummary.team || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">BoxNo.</span>
-                    <span className="detail-val code-text">{selectedSummary.box_no || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">Start</span>
-                    <span className="detail-val">{selectedSummary.start || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">Status</span>
-                    {(() => {
-                      const isFinished = selectedSummary.key_button === 7
-                      const statusLower = (selectedSummary.status || '').toLowerCase()
-                      const isCounting = !isFinished && statusLower === 'count'
-                      if (isFinished) {
+                    <div className="detail-line">
+                      <span className="detail-label">Status</span>
+                      <span className="detail-separator">:</span>
+                      {(() => {
+                        const isFinished = isSummaryFinished(selectedSummary)
+                        const statusKind = getStatusKind(selectedSummary)
+                        const isCounting = statusKind === 'running'
+                        const isPaused = statusKind === 'paused'
+                        const statusTimestamp = getStatusTimestamp(selectedSummary)
+                        if (isFinished) {
+                          return (
+                            <div className="status-finished">
+                              <span>finish</span>
+                              <span className="status-finished-time">{statusTimestamp}</span>
+                            </div>
+                          )
+                        }
+                        if (isCounting) {
+                          return (
+                            <div className="status-counting">
+                              <span className="pulse-dot" />
+                              <span>Running...</span>
+                              <span className="status-inline-time">{statusTimestamp}</span>
+                            </div>
+                          )
+                        }
+                        if (isPaused) {
+                          return (
+                            <div className="status-paused">
+                              <span className="status-symbol" aria-hidden="true">||</span>
+                              <span>{selectedSummary.status || 'Pause'}</span>
+                              <span className="status-inline-time">{statusTimestamp}</span>
+                            </div>
+                          )
+                        }
                         return (
-                          <div className="status-finished">
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span>finish</span>
-                            {selectedSummary.finish_at && (
-                              <span className="status-finished-time">{selectedSummary.finish_at}</span>
-                            )}
+                          <div className="status-neutral">
+                            <span className="status-symbol status-symbol-dot" aria-hidden="true">•</span>
+                            <span className="detail-val">{selectedSummary.status || '-'}</span>
+                            <span className="status-inline-time">{statusTimestamp}</span>
                           </div>
                         )
-                      }
-                      if (isCounting) {
-                        return (
-                          <div className="status-counting">
-                            <span className="pulse-dot" />
-                            <span>Running...</span>
-                          </div>
-                        )
-                      }
-                      return <span className="detail-val">{selectedSummary.status || '-'}</span>
-                    })()}
+                      })()}
+                    </div>
                   </div>
-                  <div className="detail-item">
-                    <span className="detail-label">User</span>
-                    <span className="detail-val">{selectedSummary.user || '-'}</span>
-                  </div>
+                  <DetailLine label="User" value={selectedSummary.user || '-'} />
                 </div>
 
                 <div className="dashboard-divider"></div>
 
                 <div className="followup-bundle-grid">
-                  <div className="detail-item">
-                    <span className="detail-label">RFID</span>
-                    <span className="detail-val code-text">{detail?.detail.rfid || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">BARCODE</span>
-                    <span className="detail-val code-text">{detail?.detail.barcode || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">QTY</span>
-                    <span className="detail-val followup-muted">{detail?.detail.qty ?? '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">SAPORDER</span>
-                    <span className="detail-val code-text">{detail?.detail.saporder || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">BUNDLE</span>
-                    <span className="detail-val followup-muted">{detail?.detail.bundle ?? '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">STYLE</span>
-                    <span className="detail-val">{detail?.detail.style || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="detail-label">COLOR</span>
-                    <span className="detail-val followup-muted">{detail?.detail.color || '-'}</span>
-                  </div>
+                  <DetailLine label="RFID" value={detail?.detail.rfid || '-'} valueClassName="code-text" />
+                  <DetailLine label="BARCODE" value={detail?.detail.barcode || '-'} valueClassName="code-text" />
+                  <DetailLine label="QTY" value={detail?.detail.qty ?? '-'} valueClassName="followup-muted" />
+                  <DetailLine label="SAPORDER" value={detail?.detail.saporder || '-'} valueClassName="code-text" />
+                  <DetailLine label="BUNDLE" value={detail?.detail.bundle ?? '-'} valueClassName="followup-muted" />
+                  <DetailLine label="STYLE" value={detail?.detail.style || '-'} />
+                  <DetailLine label="COLOR" value={detail?.detail.color || '-'} valueClassName="followup-muted" />
                 </div>
               </div>
             )}

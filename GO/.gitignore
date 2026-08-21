@@ -1,4 +1,16 @@
+# Go cache
+GO/.cache/
+.cache/
 
+# Go logs
+GO/logs/
+
+# PID files
+*.pid
+
+# Go build output
+*.exe
+*.out
 bin/
 *.exe
 *.log

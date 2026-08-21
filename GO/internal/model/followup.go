@@ -5,6 +5,7 @@ type FollowUpWorkItem struct {
 	Team      *string `json:"team"`
 	BoxNo     *string `json:"box_no"`
 	Start     *string `json:"start"`
+	LatestAt  *string `json:"latest_status_at"`
 	Status    *string `json:"status"`
 	EmpID     *string `json:"emp_id"`
 	User      string  `json:"user"`

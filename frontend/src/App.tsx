@@ -223,7 +223,7 @@ function App() {
       setCopiedUid(value)
       window.setTimeout(() => {
         setCopiedUid((cur) => (cur === value ? null : cur))
-      }, 1500)
+      }, 3000)
     } catch {
       showToast('ไม่สามารถคัดลอก UID ได้', 'error')
     }

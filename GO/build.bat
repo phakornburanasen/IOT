@@ -37,7 +37,11 @@ set "GOARCH=amd64"
 set "CGO_ENABLED=0"
 call go build -trimpath -ldflags="-s -w" -o "bin\windows-amd64\iot-api-windows-amd64.exe" .\cmd\server
 if errorlevel 1 goto :failed
-copy /Y "bin\windows-amd64\iot-api-windows-amd64.exe" "bin\iot-api-windows-amd64.exe" >nul
+copy /Y "bin\windows-amd64\iot-api-windows-amd64.exe" "bin\iot-api-windows-amd64.exe" >nul 2>nul
+if errorlevel 1 (
+    echo [WARNING] Windows deployment package was built, but the active executable was not updated because it is in use.
+    echo           Stop the GO backend and run this script again to update bin\iot-api-windows-amd64.exe.
+)
 copy /Y ".env" "bin\windows-amd64\.env" >nul
 copy /Y "README.md" "bin\windows-amd64\README.md" >nul
 
@@ -48,6 +52,7 @@ set "CGO_ENABLED=0"
 call go build -trimpath -ldflags="-s -w" -o "bin\linux-amd64\iot-api-linux-amd64" .\cmd\server
 if errorlevel 1 goto :failed
 copy /Y "bin\linux-amd64\iot-api-linux-amd64" "bin\iot-api-linux-amd64" >nul
+if errorlevel 1 goto :failed
 copy /Y ".env" "bin\linux-amd64\.env" >nul
 copy /Y "README.md" "bin\linux-amd64\README.md" >nul
 
